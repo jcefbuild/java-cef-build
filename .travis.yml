@@ -1,3 +1,5 @@
+# https://config.travis-ci.com/explore
+
 language: java
 
 git:
@@ -39,7 +41,6 @@ matrix:
             - ant
             - lbzip2
             - gnu-tar
-            - pyenv
             - cmake
           taps: AdoptOpenJDK/openjdk
           casks: adoptopenjdk8-openj9
@@ -57,6 +58,10 @@ matrix:
              --workdir "$TRAVIS_BUILD_DIR" \
              --env ARCH_DIST --env CC --env CXX --env TRAVIS_OS_NAME \
              --name travis-build --detach --tty --interactive --rm travis-build
+      script:
+          - |
+            docker exec -e JCEF_DIR travis-build ./build.sh
+            docker container stop travis-build || travis_terminate $?
 
     - os: linux
       if: tag IS present
@@ -70,9 +75,13 @@ matrix:
       deploy:
         provider: pages
         cleanup: false
-        keep_history: true
+        keep_history: false
         token: $GITHUB_RELEASE_TOKEN_PRIVATE
-        local_dir: packaging/build/install/java-cef-build-docs
+        edge: true
+        local_dir: build/install/java-cef-build-docs
+        on:
+          tags: true
+          repo: jcefbuild/java-cef-build
 
 before_install:
   - |
@@ -86,13 +95,7 @@ before_script:
   - source ./prepare-build.sh
 
 script:
-  - |
-    if [ $ARCH_DIST == 'linux32' ]; then
-      docker exec -e JCEF_DIR travis-build ./build.sh && \
-      docker container stop travis-build || travis_terminate $?
-    else
-      ./build.sh || travis_terminate $?
-    fi
+  - ./build.sh || travis_terminate $?
 
 before_deploy:
   - cd ./packaging && ../prepare-deploy.sh $JCEF_DIR/binary_distrib
@@ -102,11 +105,12 @@ after_deploy:
 
 # for encryption, see https://docs.travis-ci.com/user/encryption-keys/
 deploy:
-  - provider: releases
-    cleanup: false
-    token: $GITHUB_RELEASE_TOKEN_PRIVATE
-    file_glob: true
-    file: build/distributions/*
-    on:
-      tags: true
-      repo: smac89/java-cef-build
+  provider: releases
+  edge: true
+  cleanup: false
+  token: $GITHUB_RELEASE_TOKEN_PRIVATE
+  file_glob: true
+  file: build/distributions/*
+  on:
+    tags: true
+    repo: jcefbuild/java-cef-build
